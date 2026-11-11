@@ -1106,7 +1106,9 @@
                     <button class="icon-btn" id="open-tag-browser-btn" onclick="openTagBrowser('time')" title="発表時間・会場・カテゴリーから探す">
                         🏷️ タグ一覧
                     </button>
-                    <button class="icon-btn" onclick="openSettings()" title="表示設定・推奨枠管理">⚙️</button>
+                    <button class="icon-btn" id="sync-status-btn" onclick="openSettings()" title="お気に入り端末間同期・表示設定">
+                        ⭐同期・⚙️
+                    </button>
                 </div>
             </div>
 
@@ -1217,14 +1219,73 @@
         </div>
     </div>
 
-    <!-- 設定＆推奨演題データ反映モーダル -->
+    <!-- 設定＆お気に入り同期＆推奨演題データ反映モーダル -->
     <div id="settings-modal" class="modal-backdrop" onclick="closeSettings()">
         <div class="modal-sheet" onclick="event.stopPropagation()">
             <div class="modal-sheet-header">
-                <h3 style="margin:0; font-size:1.0rem;">⚙️ 表示設定・推奨演題の反映</h3>
+                <h3 style="margin:0; font-size:1.0rem;">⚙️ お気に入り端末間同期・表示設定</h3>
                 <button class="setting-btn" onclick="closeSettings()">閉じる</button>
             </div>
             <div class="modal-sheet-body">
+                <!-- 1. QRコード・URL・リストによる引き継ぎ（方式1） -->
+                <div style="padding: 12px; border-radius: 10px; background: var(--bg-primary); border: 1px solid var(--border-color); margin-bottom: 14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+                        <div style="font-weight: 800; font-size: 0.92rem;">⭐ お気に入り（★）の引き継ぎ（QR / URL / リスト）</div>
+                        <span id="fav-sync-count-badge" style="font-size:0.76rem; font-weight:700; padding:2px 8px; border-radius:12px; background:var(--accent-secondary); color:var(--accent-text);">現在 0 件</span>
+                    </div>
+                    <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0 0 8px 0;">
+                        外部設定なしで、今すぐPC⇔スマホ間でお気に入り（★）を送受信できます。
+                    </p>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                        <button class="setting-btn active" style="flex:1; min-width:140px;" onclick="showFavQrCode()">📱 スマホへ送る（QR表示）</button>
+                        <button class="setting-btn" style="flex:1; min-width:140px;" onclick="copyFavShareUrl()">🔗 引き継ぎURLをコピー</button>
+                    </div>
+                    <div id="fav-qr-box" style="display:none; text-align:center; padding:12px; background:#ffffff; color:#1e293b; border-radius:10px; margin-bottom:8px; border:1px solid var(--border-color);">
+                        <div id="fav-qr-title" style="font-size:0.8rem; font-weight:700; margin-bottom:6px;">スマホのカメラで読み取ってください</div>
+                        <img id="fav-qr-img" alt="QR Code" style="width:200px; height:200px; border-radius:6px; border:1px solid #e2e8f0;" />
+                        <div id="fav-qr-caption" style="font-size:0.73rem; color:#475569; margin-top:6px; word-break:break-all;"></div>
+                    </div>
+                    <details style="font-size:0.8rem;">
+                        <summary style="cursor:pointer; font-weight:700; color:var(--accent-primary); padding:4px 0;">📋 演題番号リストの直接コピー・貼り付け取込</summary>
+                        <textarea id="fav-id-list-textarea" rows="3" style="width:100%; margin-top:6px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); padding:8px; font-family:monospace; font-size:0.78rem;" placeholder="O0001-21, P0010-22 ..."></textarea>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                            <button class="setting-btn" onclick="copyFavIdList()">📋 ID一覧をコピー</button>
+                            <button class="setting-btn active" onclick="importFavIdList('merge')">➕ 現在の★に合算（追加）</button>
+                            <button class="setting-btn" onclick="importFavIdList('replace')">🔄 上書き反映</button>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- 2. クラウド自動同期（方式2：GitHub Gist / Google Apps Script） -->
+                <div style="padding: 12px; border-radius: 10px; background: var(--bg-primary); border: 1px solid var(--border-color); margin-bottom: 14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
+                        <div style="font-weight: 800; font-size: 0.92rem;">☁️ デバイス間のリアルタイム自動同期</div>
+                        <span id="cloud-sync-status-text" style="font-size:0.75rem; font-weight:700; color:var(--text-muted);">未設定</span>
+                    </div>
+                    <p style="font-size: 0.77rem; color: var(--text-secondary); margin: 0 0 8px 0;">
+                        1回設定してスマホでペアリングQRを読み取ると、以降はPC・スマホのどちらで「★」を付けても裏で自動同期されます（全学会アプリ共通で使えます）。
+                    </p>
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                        <div>
+                            <label style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:2px;">方法A：GitHub Gist 自動同期（Token と Gist ID）</label>
+                            <input type="password" id="sync-github-token" style="width:100%; padding:7px 9px; border-radius:7px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.78rem; margin-bottom:4px;" placeholder="GitHub Personal Access Token (gist権限のみ)">
+                            <div style="display:flex; gap:6px;">
+                                <input type="text" id="sync-gist-id" style="flex:1; padding:7px 9px; border-radius:7px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.78rem;" placeholder="Gist ID（空欄なら「新規作成」で自動生成）">
+                                <button class="setting-btn" onclick="createNewSyncGist()" title="Tokenを使って自分専用の非公開Gistを自動作成します">✨ 新規作成</button>
+                            </div>
+                        </div>
+                        <div style="margin-top:4px;">
+                            <label style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:2px;">方法B：Google Apps Script (GAS) ウェブアプリURL（任意・Token不要）</label>
+                            <input type="url" id="sync-gas-url" style="width:100%; padding:7px 9px; border-radius:7px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.78rem;" placeholder="https://script.google.com/macros/s/.../exec">
+                        </div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                            <button class="setting-btn active" style="flex:1;" onclick="saveCloudSyncConfigAndSync()">💾 設定保存＆今すぐ同期</button>
+                            <button class="setting-btn" onclick="showCloudPairingQr()">📲 同期設定をスマホへQR送信</button>
+                            <button class="setting-btn" onclick="clearCloudSyncConfig()">解除</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="setting-row">
                     <span class="setting-label">文字サイズ</span>
                     <div class="btn-group">
@@ -1351,7 +1412,15 @@
             setFontSize(savedFont, fontKey);
 
             loadSavedCustomRecommendations();
+            handleIncomingUrlFavsAndSyncParams();
             renderAll();
+            pullFavsFromCloud(true);
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    pullFavsFromCloud(true);
+                }
+            });
 
             searchInput.addEventListener('input', (e) => {
                 state.searchQuery = e.target.value.trim();
@@ -1837,8 +1906,12 @@
             btn.textContent = isFav ? '★' : '☆';
         }
 
-        function saveFavs() {
+        function saveFavs(skipCloudPush = false) {
             localStorage.setItem('iryoyakugaku2026_favs', JSON.stringify([...state.favorites]));
+            refreshSyncModalUi();
+            if (!skipCloudPush) {
+                scheduleCloudPush();
+            }
         }
 
         function openDetail(id, pushHistory = true) {
@@ -2146,7 +2219,394 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        const FAV_STORAGE_KEY = 'iryoyakugaku2026_favs';
+        const SYNC_TOKEN_KEY = 'conf_sync_github_token';
+        const SYNC_GIST_KEY = 'conf_sync_gist_id';
+        const SYNC_GAS_KEY = 'conf_sync_gas_url';
+        let cloudPushTimer = null;
+
+        function refreshSyncModalUi() {
+            const badge = document.getElementById('fav-sync-count-badge');
+            if (badge) badge.textContent = `現在 ${state.favorites.size} 件`;
+            const ta = document.getElementById('fav-id-list-textarea');
+            if (ta && document.activeElement !== ta) {
+                ta.value = [...state.favorites].join(', ');
+            }
+            const token = localStorage.getItem(SYNC_TOKEN_KEY) || '';
+            const gistId = localStorage.getItem(SYNC_GIST_KEY) || '';
+            const gasUrl = localStorage.getItem(SYNC_GAS_KEY) || '';
+            const tInput = document.getElementById('sync-github-token');
+            const gInput = document.getElementById('sync-gist-id');
+            const uInput = document.getElementById('sync-gas-url');
+            if (tInput && document.activeElement !== tInput) tInput.value = token;
+            if (gInput && document.activeElement !== gInput) gInput.value = gistId;
+            if (uInput && document.activeElement !== uInput) uInput.value = gasUrl;
+
+            const statusEl = document.getElementById('cloud-sync-status-text');
+            const headerBtn = document.getElementById('sync-status-btn');
+            const isConfigured = Boolean((token && gistId) || gasUrl);
+            if (statusEl) {
+                statusEl.textContent = isConfigured ? '☁️ 自動同期 ON' : '未設定';
+                statusEl.style.color = isConfigured ? 'var(--accent-primary)' : 'var(--text-muted)';
+            }
+            if (headerBtn) {
+                headerBtn.textContent = isConfigured ? '☁️★同期・⚙️' : '⭐同期・⚙️';
+            }
+        }
+
+        function setCloudSyncStatus(msg, isError = false) {
+            const statusEl = document.getElementById('cloud-sync-status-text');
+            if (statusEl) {
+                statusEl.textContent = msg;
+                statusEl.style.color = isError ? '#dc2626' : 'var(--accent-primary)';
+            }
+        }
+
+        function buildFavShareUrl() {
+            const base = window.location.origin + window.location.pathname;
+            const ids = [...state.favorites].join(',');
+            return ids ? `${base}?favs=${encodeURIComponent(ids)}` : base;
+        }
+
+        function showFavQrCode() {
+            if (state.favorites.size === 0) {
+                alert('現在お気に入り（★）が登録されていません。先に演題へ★を付けてください。');
+                return;
+            }
+            const url = buildFavShareUrl();
+            const qrBox = document.getElementById('fav-qr-box');
+            const qrImg = document.getElementById('fav-qr-img');
+            const qrTitle = document.getElementById('fav-qr-title');
+            const qrCap = document.getElementById('fav-qr-caption');
+            qrTitle.textContent = `📱 スマホのカメラで読み取ると ${state.favorites.size} 件の★が引き継がれます`;
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+            qrCap.textContent = url;
+            qrBox.style.display = 'block';
+        }
+
+        function copyFavShareUrl() {
+            if (state.favorites.size === 0) {
+                alert('現在お気に入り（★）が登録されていません。');
+                return;
+            }
+            const url = buildFavShareUrl();
+            navigator.clipboard.writeText(url).then(() => {
+                alert(`引き継ぎURL（${state.favorites.size}件）をコピーしました！\n別デバイスのブラウザで開くと★を取り込めます。`);
+            }).catch(() => {
+                prompt('以下の引き継ぎURLをコピーしてください:', url);
+            });
+        }
+
+        function copyFavIdList() {
+            const txt = [...state.favorites].join(', ');
+            if (!txt) {
+                alert('現在お気に入り（★）が登録されていません。');
+                return;
+            }
+            navigator.clipboard.writeText(txt).then(() => {
+                alert(`お気に入り演題番号リスト（${state.favorites.size}件）をコピーしました！`);
+            });
+        }
+
+        function importFavIdList(mode) {
+            const raw = (document.getElementById('fav-id-list-textarea').value || '').trim();
+            if (!raw) {
+                alert('取り込む演題番号をテキスト欄に入力または貼り付けてください。');
+                return;
+            }
+            const validIds = new Set(PRESENTATIONS.map(p => p.id));
+            const tokens = raw.split(/[\s,、;]+/).map(s => s.trim()).filter(s => validIds.has(s));
+            if (tokens.length === 0) {
+                alert('有効な演題番号が見つかりませんでした。');
+                return;
+            }
+            if (mode === 'replace') {
+                state.favorites = new Set(tokens);
+            } else {
+                tokens.forEach(id => state.favorites.add(id));
+            }
+            saveFavs();
+            renderAll();
+            alert(`${tokens.length} 件の演題を${mode === 'replace' ? '上書き' : '合算'}反映しました（現在のお気に入り計: ${state.favorites.size} 件）。`);
+        }
+
+        function handleIncomingUrlFavsAndSyncParams() {
+            let urlModified = false;
+            const params = new URLSearchParams(window.location.search);
+            const incomingFavs = params.get('favs');
+            if (incomingFavs) {
+                const validIds = new Set(PRESENTATIONS.map(p => p.id));
+                const ids = incomingFavs.split(',').map(s => s.trim()).filter(s => validIds.has(s));
+                if (ids.length > 0) {
+                    if (state.favorites.size === 0) {
+                        ids.forEach(id => state.favorites.add(id));
+                        saveFavs();
+                        setTimeout(() => alert(`引き継ぎリンクから ${ids.length} 件のお気に入り（★）を取り込みました！`), 200);
+                    } else {
+                        const merge = confirm(`引き継ぎリンクから ${ids.length} 件のお気に入り（★）が検出されました。\n\n【OK】現在のお気に入り（${state.favorites.size}件）に合算して追加する\n【キャンセル】引き継ぎデータで上書きするかどうか選択する`);
+                        if (merge) {
+                            ids.forEach(id => state.favorites.add(id));
+                            saveFavs();
+                        } else if (confirm('現在のお気に入りを消去して、引き継ぎデータで上書きしますか？')) {
+                            state.favorites = new Set(ids);
+                            saveFavs();
+                        }
+                    }
+                }
+                params.delete('favs');
+                urlModified = true;
+            }
+
+            if (window.location.hash && window.location.hash.length > 1) {
+                const hashParams = new URLSearchParams(window.location.hash.slice(1));
+                const sToken = hashParams.get('sync_token');
+                const sGist = hashParams.get('sync_gist');
+                const sGas = hashParams.get('sync_gas');
+                if ((sToken && sGist) || sGas) {
+                    if (sToken) localStorage.setItem(SYNC_TOKEN_KEY, sToken);
+                    if (sGist) localStorage.setItem(SYNC_GIST_KEY, sGist);
+                    if (sGas) localStorage.setItem(SYNC_GAS_KEY, sGas);
+                    urlModified = true;
+                    setTimeout(() => alert('☁️ クラウド自動同期のペアリング設定が完了しました！\nこれからPC・スマホ間で「★」が自動同期されます。'), 250);
+                }
+            }
+
+            if (urlModified) {
+                const cleanSearch = params.toString() ? `?${params.toString()}` : '';
+                history.replaceState(null, '', window.location.pathname + cleanSearch);
+            }
+        }
+
+        async function createNewSyncGist() {
+            const token = (document.getElementById('sync-github-token').value || '').trim();
+            if (!token) {
+                alert('先に GitHub Personal Access Token（gist権限）を入力してください。');
+                return;
+            }
+            setCloudSyncStatus('☁️ 新規Gist作成中...');
+            try {
+                const payload = {
+                    description: '学会抄録アプリ お気に入り（★）自動同期データ',
+                    public: false,
+                    files: {
+                        'conference_bookmarks_sync.json': {
+                            content: JSON.stringify({
+                                updated_at: new Date().toISOString(),
+                                [FAV_STORAGE_KEY]: [...state.favorites]
+                            }, null, 2)
+                        }
+                    }
+                };
+                const res = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                document.getElementById('sync-gist-id').value = data.id;
+                localStorage.setItem(SYNC_TOKEN_KEY, token);
+                localStorage.setItem(SYNC_GIST_KEY, data.id);
+                refreshSyncModalUi();
+                setCloudSyncStatus('☁️ 新規Gist作成＆同期完了！');
+                alert(`自分専用の非公開Gist（ID: ${data.id}）を作成し、自動同期を開始しました！\n「📲 同期設定をスマホへQR送信」を押すとスマホも同じ設定に1回で繋がります。`);
+            } catch (e) {
+                setCloudSyncStatus('⚠️ Gist作成エラー', true);
+                alert('Gistの作成に失敗しました。Tokenに「gist」権限があるか確認してください: ' + e.message);
+            }
+        }
+
+        async function saveCloudSyncConfigAndSync() {
+            const token = (document.getElementById('sync-github-token').value || '').trim();
+            const gistId = (document.getElementById('sync-gist-id').value || '').trim();
+            const gasUrl = (document.getElementById('sync-gas-url').value || '').trim();
+            localStorage.setItem(SYNC_TOKEN_KEY, token);
+            localStorage.setItem(SYNC_GIST_KEY, gistId);
+            localStorage.setItem(SYNC_GAS_KEY, gasUrl);
+            refreshSyncModalUi();
+            if (!((token && gistId) || gasUrl)) {
+                alert('GitHub Gist（TokenとGist ID）または GAS ウェブアプリURLを入力してください。');
+                return;
+            }
+            await pullFavsFromCloud(false);
+            await pushFavsToCloud();
+        }
+
+        function clearCloudSyncConfig() {
+            localStorage.removeItem(SYNC_TOKEN_KEY);
+            localStorage.removeItem(SYNC_GIST_KEY);
+            localStorage.removeItem(SYNC_GAS_KEY);
+            refreshSyncModalUi();
+            alert('クラウド自動同期の設定を解除しました（端末内の★はそのまま保持されています）。');
+        }
+
+        function showCloudPairingQr() {
+            const token = (document.getElementById('sync-github-token').value || localStorage.getItem(SYNC_TOKEN_KEY) || '').trim();
+            const gistId = (document.getElementById('sync-gist-id').value || localStorage.getItem(SYNC_GIST_KEY) || '').trim();
+            const gasUrl = (document.getElementById('sync-gas-url').value || localStorage.getItem(SYNC_GAS_KEY) || '').trim();
+            if (!((token && gistId) || gasUrl)) {
+                alert('先に自動同期の設定（GitHub Gist または GAS URL）を保存してください。');
+                return;
+            }
+            const hash = new URLSearchParams();
+            if (token && gistId) {
+                hash.set('sync_token', token);
+                hash.set('sync_gist', gistId);
+            }
+            if (gasUrl) {
+                hash.set('sync_gas', gasUrl);
+            }
+            const pairUrl = `${window.location.origin}${window.location.pathname}#${hash.toString()}`;
+            const qrBox = document.getElementById('fav-qr-box');
+            const qrImg = document.getElementById('fav-qr-img');
+            const qrTitle = document.getElementById('fav-qr-title');
+            const qrCap = document.getElementById('fav-qr-caption');
+            qrTitle.textContent = '📲 スマホで読み取ると自動同期がペアリングされます（他人に共有しないでください）';
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(pairUrl)}`;
+            qrCap.textContent = '※読み取り後、URLバーからトークン情報は自動消去されます';
+            qrBox.style.display = 'block';
+        }
+
+        function scheduleCloudPush() {
+            const token = localStorage.getItem(SYNC_TOKEN_KEY) || '';
+            const gistId = localStorage.getItem(SYNC_GIST_KEY) || '';
+            const gasUrl = localStorage.getItem(SYNC_GAS_KEY) || '';
+            if (!((token && gistId) || gasUrl)) return;
+            if (cloudPushTimer) clearTimeout(cloudPushTimer);
+            setCloudSyncStatus('☁️ 保存予約中...');
+            cloudPushTimer = setTimeout(() => {
+                pushFavsToCloud();
+            }, 600);
+        }
+
+        async function pushFavsToCloud() {
+            const token = localStorage.getItem(SYNC_TOKEN_KEY) || '';
+            const gistId = localStorage.getItem(SYNC_GIST_KEY) || '';
+            const gasUrl = localStorage.getItem(SYNC_GAS_KEY) || '';
+            if (!((token && gistId) || gasUrl)) return;
+
+            setCloudSyncStatus('☁️ クラウドへ同期中...');
+            try {
+                if (token && gistId) {
+                    const getRes = await fetch(`https://api.github.com/gists/${gistId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    });
+                    let existingObj = {};
+                    if (getRes.ok) {
+                        const gistData = await getRes.json();
+                        const fileObj = gistData.files && gistData.files['conference_bookmarks_sync.json'];
+                        if (fileObj && fileObj.content) {
+                            try { existingObj = JSON.parse(fileObj.content); } catch (e) {}
+                        }
+                    }
+                    existingObj[FAV_STORAGE_KEY] = [...state.favorites];
+                    existingObj.updated_at = new Date().toISOString();
+
+                    const patchRes = await fetch(`https://api.github.com/gists/${gistId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/vnd.github+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            files: {
+                                'conference_bookmarks_sync.json': {
+                                    content: JSON.stringify(existingObj, null, 2)
+                                }
+                            }
+                        })
+                    });
+                    if (!patchRes.ok) throw new Error(`Gist HTTP ${patchRes.status}`);
+                }
+                if (gasUrl) {
+                    await fetch(gasUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({
+                            key: FAV_STORAGE_KEY,
+                            favorites: [...state.favorites],
+                            updated_at: new Date().toISOString()
+                        })
+                    });
+                }
+                const nowStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                setCloudSyncStatus(`☁️ 同期済 (${nowStr})`);
+            } catch (e) {
+                console.warn('Cloud push error:', e);
+                setCloudSyncStatus('⚠️ 同期エラー', true);
+            }
+        }
+
+        async function pullFavsFromCloud(silent = true) {
+            const token = localStorage.getItem(SYNC_TOKEN_KEY) || '';
+            const gistId = localStorage.getItem(SYNC_GIST_KEY) || '';
+            const gasUrl = localStorage.getItem(SYNC_GAS_KEY) || '';
+            if (!((token && gistId) || gasUrl)) {
+                refreshSyncModalUi();
+                return;
+            }
+            if (!silent) setCloudSyncStatus('☁️ クラウドから取得中...');
+            try {
+                let remoteFavs = null;
+                if (token && gistId) {
+                    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    });
+                    if (!res.ok) throw new Error(`Gist HTTP ${res.status}`);
+                    const data = await res.json();
+                    const fileObj = data.files && data.files['conference_bookmarks_sync.json'];
+                    if (fileObj && fileObj.content) {
+                        const parsed = JSON.parse(fileObj.content);
+                        if (Array.isArray(parsed[FAV_STORAGE_KEY])) {
+                            remoteFavs = parsed[FAV_STORAGE_KEY];
+                        }
+                    }
+                } else if (gasUrl) {
+                    const url = `${gasUrl}${gasUrl.includes('?') ? '&' : '?'}key=${encodeURIComponent(FAV_STORAGE_KEY)}`;
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const parsed = await res.json();
+                        if (Array.isArray(parsed.favorites)) {
+                            remoteFavs = parsed.favorites;
+                        } else if (Array.isArray(parsed[FAV_STORAGE_KEY])) {
+                            remoteFavs = parsed[FAV_STORAGE_KEY];
+                        }
+                    }
+                }
+                if (Array.isArray(remoteFavs)) {
+                    const validIds = new Set(PRESENTATIONS.map(p => p.id));
+                    const filteredRemote = remoteFavs.filter(id => validIds.has(id));
+                    const currentStr = JSON.stringify([...state.favorites].sort());
+                    const remoteStr = JSON.stringify([...new Set(filteredRemote)].sort());
+                    if (currentStr !== remoteStr) {
+                        state.favorites = new Set(filteredRemote);
+                        saveFavs(true);
+                        if (state.currentDetailId) updateDetailFavBtn();
+                        renderAll();
+                    }
+                }
+                const nowStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                setCloudSyncStatus(`☁️ 同期済 (${nowStr})`);
+            } catch (e) {
+                console.warn('Cloud pull error:', e);
+                if (!silent) alert('クラウドからの同期取得に失敗しました: ' + e.message);
+                setCloudSyncStatus('⚠️ 同期エラー', true);
+            }
+        }
+
         function openSettings() {
+            refreshSyncModalUi();
             document.getElementById('settings-modal').classList.add('open');
         }
 
